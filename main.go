@@ -1,7 +1,14 @@
 package main
 
-import "fmt"
+import (
+	"RateLimit/api"
+	"log"
+)
 
 func main() {
-	fmt.Print("hello")
+	log.Print("Starting...")
+
+	if err := api.Serve(); err != nil {
+		log.Fatalf("Failed to run Seerve. Err '%v'", err)
+	}
 }
