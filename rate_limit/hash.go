@@ -5,7 +5,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func NewMd5UUID(namespace, name string) (uuid.UUID, error) {
+func newMd5UUID(namespace, name string) (uuid.UUID, error) {
 	hash := md5.New()
 	_, err := hash.Write([]byte(namespace))
 	if err != nil {
