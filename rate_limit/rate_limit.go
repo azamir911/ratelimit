@@ -33,14 +33,14 @@ func newRateLimiter(threshold int, ttl int) RateLimiter {
 type rateLimiter struct {
 	// elements is a map that holds all the requests its attributes
 	elements map[uuid.UUID]*value
-	mutexes  sync.Map
-	//mut     sync.RWMutex
+	// mutexes is a map to handle locking for each element
+	mutexes sync.Map
 	// threshold from arguments
 	threshold int
-	// TTL from arguments
+	// ttl from arguments
 	ttl    int
 	ticker *time.Ticker
-	// The rate limit context
+	// The rate limit context to stop the ticker
 	ctx context.Context
 }
 

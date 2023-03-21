@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 type reportInput struct {
@@ -24,7 +25,7 @@ func GetRateLimitReportHandlerFunc(rateLimiter rate_limit.RateLimiter) gin.Handl
 			log.Println("Failed parsing input. Err '%w'", err)
 			c.Status(http.StatusBadRequest)
 			return
-		} else if input.Url == "" {
+		} else if strings.TrimSpace(input.Url) == "" {
 			log.Println("Got empty input")
 			c.Status(http.StatusBadRequest)
 			return

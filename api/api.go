@@ -6,13 +6,19 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const (
+	threshold = "threshold"
+	ttl       = "ttl"
+)
+
 func Serve() error {
-	threshold, err := enviroment.GetEnvAsInt("threshold")
+
+	threshold, err := enviroment.GetEnvAsInt(threshold)
 	if err != nil {
 		return err
 	}
 
-	ttl, err := enviroment.GetEnvAsInt("ttl")
+	ttl, err := enviroment.GetEnvAsInt(ttl)
 	if err != nil {
 		return err
 	}

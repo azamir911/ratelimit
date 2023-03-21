@@ -5,11 +5,12 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 )
 
 func GetEnvAsInt(key string) (int, error) {
 	keyStr := os.Getenv(key)
-	if keyStr == "" {
+	if strings.TrimSpace(keyStr) == "" {
 		return 0, fmt.Errorf("empty '%s'", key)
 	}
 
