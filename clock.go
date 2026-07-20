@@ -15,7 +15,7 @@ type ticker interface {
 type realClock struct{}
 
 func (realClock) now() time.Time {
-	return time.Now().UTC()
+	return time.Now()
 }
 
 func (realClock) newTicker(interval time.Duration) ticker {
