@@ -1,52 +1,161 @@
-# RateLimit
-Engineering Task - Rate Limiter
-Implement a web service that acts as a third party rate limiter.
+# ratelimit
 
-Specifications
-The service should:
-1. Accept following arguments during startup (command line args):
-● threshold - Max number of requests per URL within a time period (ttl).
-● ttl - The time period in which URL visits will be counted.
-2. Expose an endpoint to report URL visits in the following format:
-POST /report
-Content-Type: application/json
-{
-"url": "http://www.sample.com"
+[![CI](https://github.com/azamir911/ratelimit/actions/workflows/ci.yml/badge.svg)](https://github.com/azamir911/ratelimit/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/azamir911/ratelimit.svg)](https://pkg.go.dev/github.com/azamir911/ratelimit)
+
+A dependency-free, concurrency-safe fixed-window rate limiter for Go applications.
+
+The core package is designed for direct embedding in services. It uses sharded maps to reduce lock contention, hashes keys to a fixed-size representation, bounds retained keys, cleans expired state, and exposes explicit lifecycle and capacity errors.
+
+## Status
+
+This repository is being prepared for its first public release. After publication and tagging, install it with:
+
+```bash
+go get github.com/azamir911/ratelimit@v0.1.0
+```
+
+## Quick start
+
+```go
+package main
+
+import (
+    "log"
+    "time"
+
+    "github.com/azamir911/ratelimit"
+)
+
+func main() {
+    limiter, err := ratelimit.New(ratelimit.Config{
+        Limit:   100,
+        Window:  time.Minute,
+        MaxKeys: 100_000,
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer limiter.Close()
+
+    decision, err := limiter.Allow("tenant:42")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    if !decision.Allowed {
+        log.Printf("retry after %s", decision.RetryAfter)
+    }
 }
-3. The response to each request should be "block" true/false - depends on if the number of
-times the URL was reported reached the threshold:
+```
+
+## API
+
+### Configuration
+
+| Field | Meaning | Default |
+|---|---|---|
+| `Limit` | Maximum accumulated cost allowed per key and window | Required |
+| `Window` | Per-key fixed-window duration | Required |
+| `MaxKeys` | Maximum keys retained in memory | `100000` |
+| `Shards` | Number of independently locked maps | `64` |
+| `CleanupInterval` | Background expired-key cleanup frequency | `Window` |
+| `DisableBackgroundCleanup` | Disable the cleanup goroutine | `false` |
+
+`Limit` follows conventional semantics: with a limit of 10, requests 1 through 10 are allowed and request 11 is blocked.
+
+### Decisions
+
+`Allow` and `AllowN` return a `Decision` containing:
+
+- `Allowed`
+- `Limit`
+- `Count`
+- `Remaining`
+- `ResetAt`
+- `RetryAfter`
+
+Blocked attempts are included in `Count`. The window reset time does not move when additional requests arrive.
+
+### Lifecycle
+
+`Close` is idempotent and stops background cleanup. Calls already in progress may complete; calls started after closure return `ratelimit.ErrClosed`.
+
+### Capacity
+
+Keys are stored as SHA-256 hashes, bounding retained key size and avoiding storage of raw identifiers. `MaxKeys` bounds cardinality. When capacity is full, new keys return `ratelimit.ErrCapacity`. The request path does not perform a full-map cleanup, so overload remains `O(1)`. Expired keys are reclaimed by background cleanup or an explicit `Cleanup()` call.
+
+This protects the process from unbounded key growth, but callers must still choose a capacity and cleanup interval appropriate for their workload.
+
+## Standalone HTTP service
+
+The repository includes `ratelimitd`, a standard-library HTTP service built on the same package.
+
+```bash
+go run ./cmd/ratelimitd \
+  -listen :8080 \
+  -limit 100 \
+  -window 1m \
+  -max-keys 100000
+```
+
+Check a key:
+
+```bash
+curl -sS http://localhost:8080/v1/check \
+  -H 'Content-Type: application/json' \
+  -d '{"key":"tenant:42","cost":1}'
+```
+
+Example response:
+
+```json
 {
-"block": true
+  "allowed": true,
+  "limit": 100,
+  "count": 1,
+  "remaining": 99,
+  "reset_at": "2026-07-20T16:00:00Z",
+  "retry_after_ms": 0
 }
-4. Track the number of times each URL was reported within the ttl period. Each URL should
-be counted on a separate ttl period, starting from the first occurence of the URL.
-5. Each URL should be hashed in order to prevent memory abuse.
+```
 
-Notes
-● Do not use external services (like redis, etc...) - it should be implemented in-memory.
-● Implement the above in Go / Java / C#.
+Health endpoint:
 
-● Assume this is a production service - make sure the code is well organized and readable
-and has no major performance issues.
-● Make sure the service has no resource leaks.
-● Logging will be appreciated.
-● Clean code will be appreciated.
+```text
+GET /healthz
+```
 
-Example
-ttl: 60,000 (1 minute), threshold: 10
-00:00:00 URL /abc is reported, count=1, not blocked
-00:00:05 URL /foo is reported, count=1, not blocked
-00:00:12 URL /abc is reported, count=2, not blocked
-00:00:20 URL /abc is reported, count=3, not blocked
-00:00:22 URL /abc is reported, count=4, not blocked
-00:00:30 URL /abc is reported, count=5, not blocked
-00:00:35 URL /abc is reported, count=6, not blocked
-00:00:39 URL /abc is reported, count=7, not blocked
-00:00:42 URL /abc is reported, count=8, not blocked
-00:00:43 URL /abc is reported, count=9, not blocked
-00:00:48 URL /abc is reported, count=10, blocked
-00:00:51 URL /foo is reported, count=2, not blocked
-00:00:55 URL /abc is reported, count=11, blocked
-00:01:00 URL /abc is reported, count=1, not blocked
-00:01:03 URL /foo is reported, count=3, not blocked
-00:01:07 URL /foo is reported, count=1, not blocked
+## Algorithm and guarantees
+
+This implementation uses a per-key fixed window that starts when a key is first observed after expiry.
+
+- Average lookup and update complexity: `O(1)`
+- Cleanup complexity: `O(number of retained keys)`
+- Concurrency: sharded locks, with one lock acquired per request
+- Key storage: SHA-256 digest, not the raw key
+- Overflow: counters use saturating arithmetic
+- Time: real timestamps retain Go's monotonic component inside the process
+
+## Important limitations
+
+This limiter is intentionally process-local. Separate processes maintain separate counters. It is not suitable for a globally coordinated limit across replicas without an external shared system.
+
+Fixed windows can permit a burst around a window boundary. Applications requiring smoother traffic should use a token-bucket, leaky-bucket, or sliding-window algorithm.
+
+Hashing bounds key size but does not authenticate keys. Build keys from trusted identity and routing information rather than directly accepting arbitrary unvalidated client input.
+
+## Development
+
+```bash
+gofmt -w .
+go vet ./...
+go test ./...
+go test -race ./...
+go test -run=^$ -fuzz=FuzzAllow -fuzztime=3s .
+go test -run=^$ -bench=. -benchmem .
+```
+
+## License
+
+MIT
