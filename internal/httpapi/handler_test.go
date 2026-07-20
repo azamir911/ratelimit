@@ -55,6 +55,24 @@ func TestCheckEndpointRejectsInvalidInput(t *testing.T) {
 	}
 }
 
+func TestCheckEndpointRejectsZeroCost(t *testing.T) {
+	t.Parallel()
+	limiter, err := ratelimit.New(ratelimit.Config{Limit: 1, Window: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer limiter.Close()
+
+	recorder := httptest.NewRecorder()
+	NewHandler(limiter).ServeHTTP(
+		recorder,
+		httptest.NewRequest(http.MethodPost, "/v1/check", strings.NewReader(`{"key":"a","cost":0}`)),
+	)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", recorder.Code)
+	}
+}
+
 func TestHealthEndpoint(t *testing.T) {
 	t.Parallel()
 	limiter, err := ratelimit.New(ratelimit.Config{Limit: 1, Window: time.Minute})
