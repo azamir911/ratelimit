@@ -14,8 +14,8 @@ import (
 const maxRequestBodyBytes = 1 << 20
 
 type checkRequest struct {
-	Key  string `json:"key"`
-	Cost uint64 `json:"cost,omitempty"`
+	Key  string  `json:"key"`
+	Cost *uint64 `json:"cost,omitempty"`
 }
 
 type checkResponse struct {
@@ -57,11 +57,12 @@ func checkHandler(limiter *ratelimit.Limiter) http.HandlerFunc {
 			return
 		}
 		request.Key = strings.TrimSpace(request.Key)
-		if request.Cost == 0 {
-			request.Cost = 1
+		cost := uint64(1)
+		if request.Cost != nil {
+			cost = *request.Cost
 		}
 
-		decision, err := limiter.AllowN(request.Key, request.Cost)
+		decision, err := limiter.AllowN(request.Key, cost)
 		if err != nil {
 			switch {
 			case errors.Is(err, ratelimit.ErrEmptyKey), errors.Is(err, ratelimit.ErrInvalidCost):
@@ -79,7 +80,7 @@ func checkHandler(limiter *ratelimit.Limiter) http.HandlerFunc {
 			Limit:           decision.Limit,
 			Count:           decision.Count,
 			Remaining:       decision.Remaining,
-			ResetAt:         decision.ResetAt,
+			ResetAt:         decision.ResetAt.UTC(),
 			RetryAfterMilli: decision.RetryAfter.Milliseconds(),
 		})
 	}
