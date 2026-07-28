@@ -2,18 +2,22 @@
 
 [![CI](https://github.com/azamir911/ratelimit/actions/workflows/ci.yml/badge.svg)](https://github.com/azamir911/ratelimit/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/azamir911/ratelimit.svg)](https://pkg.go.dev/github.com/azamir911/ratelimit)
+[![Release](https://img.shields.io/github/v/release/azamir911/ratelimit)](https://github.com/azamir911/ratelimit/releases/latest)
+[![License](https://img.shields.io/github/license/azamir911/ratelimit)](LICENSE)
 
 A dependency-free, concurrency-safe fixed-window rate limiter for Go applications.
 
 The core package is designed for direct embedding in services. It uses sharded maps to reduce lock contention, hashes keys to a fixed-size representation, bounds retained keys, cleans expired state, and exposes explicit lifecycle and capacity errors.
 
-## Status
+## Install
 
-This repository is being prepared for its first public release. After publication and tagging, install it with:
+The current public release is `v0.1.0`:
 
 ```bash
 go get github.com/azamir911/ratelimit@v0.1.0
 ```
+
+Versions below `v1.0.0` may introduce breaking API changes between minor releases. Pin a version in production and review the changelog before upgrading.
 
 ## Quick start
 
